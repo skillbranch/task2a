@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import url from 'url';
 
 const app = express();
 app.use(cors());
@@ -33,6 +34,42 @@ app.get('/task2B', (req, res) => {
     result = 'Invalid fullname';
   }
   res.send(result);
+});
+
+app.get('/task2C',(req,res)=>{
+   console.log('===================');
+   console.log(req.query.username);
+   var un=String.trim(req.query.username);
+   let username;
+   if(!/\//.test(un)){
+        if(un.length>0){
+            if(un[0]!='@'){
+                un='@'+un;
+            }
+            return res.send(un);
+        }
+   }
+   if(!/^(http:|https:)\/\//.test(un)){
+      if(/^\/\//.test(un)){
+         un="http:"+un
+      }else{
+         un='http://'+un;
+      }
+
+    }  
+ 
+  console.log('UN',un);
+   var pathname = url.parse(un).pathname; 
+console.log(pathname) 
+   username=/^\/([^\/]+)/.exec(pathname);
+   if(username.length>0){
+      if(username[1][0]!='@'){
+        username='@'+username[1];
+      }else{
+        username=username[1];
+      }
+   }
+   res.send(username);
 });
 
 app.listen(3000, () => {
