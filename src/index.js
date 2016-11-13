@@ -1,8 +1,21 @@
 import express from 'express';
 import cors from 'cors';
 import url from 'url';
+import fetch from 'isomorphic-fetch';
+import _ from 'lodash';
 
 const app = express();
+const pcUrl = 'https://gist.githubusercontent.com/isuvorov/ce6b8d87983611482aac89f6d7bc0037/raw/pc.json';
+
+let pc = {};
+fetch(pcUrl)
+  .then(async (res) => {
+    pc = await res.json();
+  })
+  .catch((err) => {
+    console.log('Чтото пошло не так:', err);
+  });
+
 app.use(cors());
 app.get('/', (req, res) => {
   res.json({
@@ -36,42 +49,90 @@ app.get('/task2B', (req, res) => {
   res.send(result);
 });
 
-app.get('/task2C',(req,res)=>{
-   console.log('===================');
-   console.log(req.query.username);
-   var un=String.trim(req.query.username);
-   let username;
-   if(!/\//.test(un)){
-        if(un.length>0){
-            if(un[0]!='@'){
-                un='@'+un;
-            }
-            return res.send(un);
-        }
-   }
-   if(!/^(http:|https:)\/\//.test(un)){
-      if(/^\/\//.test(un)){
-         un="http:"+un
-      }else{
-         un='http://'+un;
+app.get('/task2C', (req, res) => {
+  console.log('===================');
+  console.log(req.query.username);
+  let un = String.trim(req.query.username);
+  let username;
+  if (!/\//.test(un)) {
+    if (un.length > 0) {
+      if (un[0] != '@') {
+        un = `@${un}`;
       }
+      return res.send(un);
+    }
+  }
+  if (!/^(http:|https:)\/\//.test(un)) {
+    if (/^\/\//.test(un)) {
+      un = `http:${un}`;
+    } else {
+      un = `http://${un}`;
+    }
+  }
 
-    }  
- 
-  console.log('UN',un);
-   var pathname = url.parse(un).pathname; 
-console.log(pathname) 
-   username=/^\/([^\/]+)/.exec(pathname);
-   if(username.length>0){
-      if(username[1][0]!='@'){
-        username='@'+username[1];
-      }else{
-        username=username[1];
-      }
-   }
-   res.send(username);
+  console.log('UN', un);
+  const pathname = url.parse(un).pathname;
+  console.log(pathname);
+  username = /^\/([^\/]+)/.exec(pathname);
+  if (username.length > 0) {
+    if (username[1][0] != '@') {
+      username = `@${username[1]}`;
+    } else {
+      username = username[1];
+    }
+  }
+  res.send(username);
 });
 
+function f(objs = [], [cur, ...path] = []) {
+  if (objs.length == 0) {
+    return [];
+  }
+  if (cur === undefined) {
+    return objs;
+  }
+
+  if (!/^\d+$/.test(cur)) {
+    return f(objs.reduce((res, obj) => {
+      if (typeof obj == 'object' && obj.hasOwnProperty(cur)) {
+	    const objcur = obj[cur];
+
+	    if (!Array.isArray(objcur)) {
+      return [...res, obj[cur]];
+	    }
+	    return res.concat(objcur);
+      } else {
+        return res;
+      } }, []),
+     path);
+  } else {
+    const icur = parseInt(cur, 10);
+    const obj = objs[icur];
+
+    return f((obj !== undefined) ? [objs[icur]] : [], path);
+  }
+}
+app.get('/task3A/volumes', (req, res) => {
+  res.json(_.mapValues(f([pc], ['hdd']).reduce((sum, d) => {
+    sum[d.volume] = (sum[d.volume] || 0) + d.size;
+    return sum;
+  }, {}), num => `${num}B`));
+});
+app.get(/^\/task3A(|\/.*)$/, (req, res) => {
+  const url = req.params[0];
+  console.log(url);
+  const path = (url.length > 1) ? url.split('/').splice(1) : [];
+  if (path[path.length - 1] == '') {
+    path.pop();
+  }
+  const rslt = f([pc], path);
+
+  switch (rslt.length) {
+    case 1: res.json(rslt[0]); break;
+    case 0: res.status(404).send('Not Found'); break;
+    default: res.send(rslt);
+  }
+});
 app.listen(3000, () => {
   console.log('Your app listening on port 3000!');
 });
