@@ -133,6 +133,80 @@ app.get(/^\/task3A(|\/.*)$/, (req, res) => {
     default: res.send(rslt);
   }
 });
+function hsl2rgb(h,s,l){
+  let q=(l<0.5)?l*(1.0+s):(l+s-(l*s));
+  let p=2.0*l-q;
+  let hk =h/360;
+  let tr =hk+1/3;
+  let tg=hk;
+  let tb=hk-1/3;
+
+  return [tr,tg,tb].map((x)=>{
+    if (x<0){
+      return x+1;
+    }
+    if(x>1){
+      return x-1;
+    }
+    return x;
+  }).map((t)=>{
+	if(t<1/6) {
+	return p+((q-p)*6*t);
+	}
+	if(t<1/2){
+	return q;
+	}
+	if(t<2/3){
+	return p+((q-p)*(2/3-t)*6);
+	}
+	return p;
+	})
+}
+app.get('/task2D', (req,res) => {
+   var r='Invalid color';
+   var m=(/^\s*#?([0-9a-f]{6})\s*$/i.exec(req.query.color));
+   if(m!==null){
+       return res.send('#'+m[1].toLowerCase());
+   }else {
+      
+      m=/^\s*#?([0-9a-f]{3})\s*$/i.exec(req.query.color);
+      if(m!==null){
+      return res.send(m[1].toLowerCase().split('').reduce((o,n)=>{return `${o}${n}${n}`},"#"));
+     }
+  }
+  var c = (''+unescape(req.query.color)).replace(/\s+/g,'');
+  console.log(c)
+  m=/^rgb\((\d{1,3}),(\d{1,3}),(\d{1,3})\)/.exec(c);
+  if(m!==null){
+     let re="#";
+     for( let h of [ parseInt(m[1],10).toString(16),
+       parseInt(m[2],10).toString(16),
+       parseInt(m[3],10).toString(16)]){
+       if(h.length==1){
+         re=re+'0'+h;
+    
+       } else if (h.length == 2 ){
+         re=re+h;
+       } else{
+          return res.send(r);
+       }
+     }
+     return res.send(re);
+     
+  }
+  m=/^hsl\((\d{1,3}),(\d{1,3})%,(\d{1,3})%\)/.exec(c);
+  if(m!==null){
+	let re = "#";
+        let [h,s,l]=[m[1],m[2],m[3]].map(x=>parseInt(x,10));
+        if(h>360 || s> 100 || l> 100){
+ 		return res.send(r);
+        }
+        re=re+hsl2rgb(h,s/100,l/100).map(x=>Math.round(x*255).toString(16)).map(x=>(x.length==1)?'0'+x:x).join('');
+	return res.send(re);
+        
+  }
+  res.send(r);
+});
 app.listen(3000, () => {
   console.log('Your app listening on port 3000!');
 });
