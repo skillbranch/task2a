@@ -6,6 +6,7 @@ import _ from 'lodash';
 
 const app = express();
 const pcUrl = 'https://gist.githubusercontent.com/isuvorov/ce6b8d87983611482aac89f6d7bc0037/raw/pc.json';
+const zooUrl = 'https://gist.githubusercontent.com/isuvorov/55f38b82ce263836dadc0503845db4da/raw/pets.json';
 
 let pc = {};
 fetch(pcUrl)
@@ -15,6 +16,16 @@ fetch(pcUrl)
   .catch((err) => {
     console.log('Чтото пошло не так:', err);
   });
+
+let zoo ={};
+fetch(zooUrl)
+  .then(async (res) => {
+    zoo = await res.json();
+  })
+  .catch((err) => {
+    console.log('Чтото пошло не так:', err);
+  });
+
 
 app.use(cors());
 app.get('/', (req, res) => {
@@ -215,6 +226,160 @@ let a=['1','18','243','3240','43254','577368','7706988','102876480','1373243544'
 '1384201395738071424','18476969736848122368','246639261965462754048'];
 return res.send(a[req.query.i]);
 })
+function f1(objs = [], [cur, ...path] = []) {
+  if (objs.length == 0) {
+    return [];
+  }
+  if (cur === undefined) {
+    return objs;
+  }
+
+  if (!/^\d+$/.test(cur)) {
+    return f1(objs.reduce((res, obj) => {
+      if (typeof obj == 'object' && obj.hasOwnProperty(cur)) {
+	    const objcur = obj[cur];
+
+	    if (!Array.isArray(objcur)) {
+      return [...res, obj[cur]];
+	    }
+	    return res.concat(objcur);
+      } else {
+        return res;
+      } }, []),
+     path);
+  } else {
+    const icur = parseInt(cur, 10);
+    //search by id
+    let obj;
+    for (obj of objs){
+      if(obj.hasOwnProperty('id') 
+         && obj.id==icur ){
+                 return f1([obj],path);
+         break;
+      }
+    }
+    return f1([],path);
+  }
+}
+function _task3BFilter(arr,query,kquery){
+return arr.filter(function(obj){
+        if(kquery.length >0){  
+  		for(let key of kquery){
+                       
+                    
+                    let matches = key.match(/(.*)(_gt|_lt)$/);
+                    if(matches === null) {
+                       if ( !obj.hasOwnProperty(key) || obj[key]!=query[key]) {return false;}
+                    }else{
+                      if(!obj.hasOwnProperty(matches[1])){return false;}
+                      switch(matches[2]){
+                        case '_lt': 
+				if(obj[matches[1]]>=query[key]){return false;}
+				break;
+                         case '_gt': 
+				if(obj[matches[1]]<=query[key]){return false;}
+				break;
+                      }
+                    }
+        	}
+        }
+        return true;
+  });
+
+}
+function usersHavePet(petType){
+  let ids=_task3BFilter(f1([zoo],['pets']),{type:petType},['type']).map(o=>o.userId);
+  console.log('IDS',ids);
+  return f1([zoo],['users']).filter(obj=>ids.indexOf(obj.id)>=0)
+}
+app.get(/^\/task3B(|\/.*)$/, (req, res) => {
+  const url = req.params[0];
+  console.log(url);
+  const path = (url.length > 1) ? url.split('/').splice(1) : [];
+  if (path[path.length - 1] == '') {
+    path.pop();
+  }
+  let data; 
+  let havePet=false;
+  let populate= path[path.length-1]=='populate';
+  if(populate){
+     path.pop();
+  }
+  const query = req.query;
+  if( path.length==1 
+      && path[0]=='users'
+      && query.hasOwnProperty('havePet')){
+    data = usersHavePet(query.havePet)
+    delete query.havePet;
+    havePet=true;
+  }else if (path.length==2 
+        && path[0]=='users'
+        && !/^\d+$/.test(path[1])){
+    console.log("NOT DIGIT USER");
+    data=[];
+    for( let user of f1([zoo],['users'])){
+       if(user.username == path[1]){
+         console.log('User', user);
+         data=[user];
+         break;
+       }
+    }
+  }else{
+    console.log('DEfault data');
+    data=f1([zoo],path)
+  }
+  console.log("data",data);
+  const kquery = Object.keys(query);
+
+  let rslt  = _task3BFilter(data,query,kquery);  
+  console.log(req.query)
+console.log(rslt)
+  if(path[0]=='pets' && populate){
+     let users = f1([zoo],['users']);
+     rslt=rslt.map((r)=>{
+         let o=Object.assign({},r)
+         for(let user of users){
+            if(o.userId==user.id){
+            return Object.assign(o,{user:user}) 
+            
+            
+            }
+         }
+     })
+  }else if(path[0]=='users' && populate){
+     let pets = f1([zoo], ['pets']);
+     rslt=rslt.map ( (o) => {
+        
+        let pts=[];
+        let pet;
+        for( pet of pets){
+           if (pet.userId==o.id){
+              pts.push(pet);
+           } 
+        }
+
+        return Object.assign({},o, {pets:pts});
+     });
+  }
+  switch (rslt.length) {
+    case 1: if(!havePet &&  kquery.length == 0){ 
+              res.json(rslt[0]);
+            }else{
+              res.json(rslt);
+            } 
+            break;
+    case 0: 
+            if(!havePet && kquery.length == 0 ){
+            	res.status(404).send('Not Found'); 
+            }else{
+            	res.json([]); 
+            }
+	 break;
+
+    default: res.send(rslt);
+  }
+});
+
 app.listen(3000, () => {
   console.log('Your app listening on port 3000!');
 });
