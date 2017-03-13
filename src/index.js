@@ -1,9 +1,13 @@
+import mongoose from 'mongoose';
+mongoose.Promise = global.Promise;
+mongoose.connect('mongodb://localhost/pokemons');
 import express from 'express';
 import cors from 'cors';
 import url from 'url';
 import fetch from 'isomorphic-fetch';
 import _ from 'lodash';
-
+import Pokemons from './models/pokemons';
+import PokemonsLoads from './models/load';
 const app = express();
 const pcUrl = 'https://gist.githubusercontent.com/isuvorov/ce6b8d87983611482aac89f6d7bc0037/raw/pc.json';
 const zooUrl = 'https://gist.githubusercontent.com/isuvorov/55f38b82ce263836dadc0503845db4da/raw/pets.json';
@@ -35,7 +39,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/task2A', (req, res) => {
-  const sum = (parseInt(req.query.a, 10) || 0) + (parseInt(req.query.b, 10) || 0);
+  const sum = (parseFloat(req.query.a) || 0) + (parseFloat(req.query.b) || 0);
   res.send(sum.toString());
 });
 
@@ -379,7 +383,111 @@ console.log(rslt)
     default: res.send(rslt);
   }
 });
+let pokemonsUrl='https://pokeapi.co/api/v2/pokemon';
+let Pokemon=Pokemons();
+let PokemonLoad=PokemonsLoads()
+async function addPokemons(arr){
+   let promises=[];
+    for(let poke of arr){
+       let p = new Pokemon(poke);
 
+       promises.push(p.save());
+       //pokemons.push.apply(pokemons,arr)
+    }
+    return await promises;
+}
+async function loadPokemons(Url){
+   
+  try{
+     const response = await fetch(Url);
+     const pok= await response.json();
+     
+     
+     await addPokemons(pok.results);
+     
+     if(pok.next!=null){
+       PokemonLoad.then((load)=>{
+         load.page=Url;
+         load.save();
+       })
+       
+       return await loadPokemons(pok.next);
+     }
+     PokemonLoad.then((load)=>{
+         load.finished=true;
+         load.save();
+       })
+       
+     return Promise.resolve();
+  }catch(e){
+    console.log('ERROR',e);
+    throw e;
+  }
+}
+
+
+function populatePokemons(){
+      let r= Pokemon.find({$or : [{height:{$exists:false}}, {weight:{$exists:false}}]}).limit(20).exec().then(async function(pokes){
+      try{
+            if(pokes.length == 0) {
+               return Promise.reject();
+            }
+            let promises=[];
+            for(let poke of pokes){
+                const response = await fetch(poke.url);
+                const rpok = await response.json();
+                
+                poke.height=rpok.height|0;
+                poke.weight=rpok.weight|0;
+                console.log(poke.name, poke.height,poke.weight, poke.url)
+                promises.push(poke.save())
+            }
+            
+            return Promise.all(promises);
+       }catch(e){
+              console.log(e);
+       }
+     })
+     r.then(()=>populatePokemons()).catch(()=>console.log('Pokemons populated'));
+     
+}
+PokemonLoad.then((load)=>{    
+    ((!load.finished)?loadPokemons(load.page||pokemonsUrl):Promise.resolve()).then(function(){
+     console.log('Pokemons loaded');
+     
+    populatePokemons();
+  });
+});
+function middleware3C (req,res,next){
+req.sort={name:1};
+req.limit=(req.query.limit|0)||20;
+req.offset=(req.query.offset|0)||0;
+next();
+}
+app.get('^/task3C/fat', middleware3C, (req,res)=>{
+Pokemon.aggregate().project({name:1,weight:1, height:1,field:{$divide:["$height","$weight"]}}).sort(Object.assign({field:1},req.sort)).skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+})
+app.get('^/task3C/angular', middleware3C, (req,res)=>{
+Pokemon.aggregate().project({name:1,weight:1, height:1,field:{$divide:["$weight","$height"]}}).sort(Object.assign({field:1},req.sort)).skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+})
+app.get('^/task3C/heavy', middleware3C, (req,res)=>{
+Pokemon.find({}).sort(Object.assign({weight:-1},req.sort)).select('name').skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+})
+app.get('^/task3C/light', middleware3C, (req,res)=>{
+Pokemon.find({}).sort(Object.assign({weight:1},req.sort)).select('name').skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+})
+app.get('^/task3C/micro', middleware3C, (req,res)=>{
+Pokemon.find({}).sort(Object.assign({height:1},req.sort)).select('name').skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+})
+app.get('^/task3C/huge', middleware3C, (req,res)=>{
+
+Pokemon.find({}).sort(Object.assign({height:-1},req.sort)).select('name').skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+})
+app.get('^/task3C', middleware3C, (req,res)=>{
+
+Pokemon.find({}).sort(req.sort).select('name').skip(req.offset).limit(req.limit).exec().then((poks)=>res.json(poks.map(o=>o.name)));
+
+})
 app.listen(3000, () => {
   console.log('Your app listening on port 3000!');
 });
