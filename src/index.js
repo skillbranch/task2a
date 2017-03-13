@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-mongoose.Promise = global.Promise;
-mongoose.connect('mongodb://localhost/pokemons');
+//mongoose.Promise = global.Promise;
+//mongoose.connect('mongodb://localhost/pokemons');
 import express from 'express';
 import cors from 'cors';
 import url from 'url';
